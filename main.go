@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"runtime"
 	"syscall"
 	"unsafe"
 )
@@ -29,6 +30,7 @@ const (
 	SS_CENTER        = 0x00000001
 	CBS_DROPDOWNLIST = 0x00000003
 
+	WM_PAINT   = 0x000F
 	WM_COMMAND = 0x0111
 	WM_TIMER   = 0x0113
 	WM_DESTROY  = 0x0002
@@ -66,6 +68,15 @@ const (
 var intervals = []int{1, 2, 5, 10, 15, 20, 30, 45, 60}
 
 type POINT struct{ X, Y int32 }
+type RECT struct{ Left, Top, Right, Bottom int32 }
+type PAINTSTRUCT struct {
+	Hdc         syscall.Handle
+	FErase      int32
+	RcPaint     RECT
+	FRestore    int32
+	FIncUpdate  int32
+	RgbReserved [32]byte
+}
 type MSG struct {
 	Hwnd    syscall.Handle
 	Message uint32
@@ -112,6 +123,8 @@ var (
 	pSendMessage      = user32.NewProc("SendMessageW")
 	pSetWindowPos     = user32.NewProc("SetWindowPos")
 	pGetSystemMetrics = user32.NewProc("GetSystemMetrics")
+	pBeginPaint       = user32.NewProc("BeginPaint")
+	pEndPaint         = user32.NewProc("EndPaint")
 
 	pGetModuleHandle = kernel32.NewProc("GetModuleHandleW")
 	pGetStockObject  = gdi32.NewProc("GetStockObject")
@@ -220,6 +233,12 @@ func wndProc(hwnd syscall.Handle, msg uint32, wParam uintptr, lParam uintptr) ui
 		}
 		return 0
 
+	case WM_PAINT:
+		var ps PAINTSTRUCT
+		pBeginPaint.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&ps)))
+		pEndPaint.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&ps)))
+		return 0
+
 	case WM_DESTROY:
 		if running {
 			pKillTimer.Call(uintptr(hwnd), TIMER_ID)
@@ -234,6 +253,8 @@ func wndProc(hwnd syscall.Handle, msg uint32, wParam uintptr, lParam uintptr) ui
 }
 
 func main() {
+	runtime.LockOSThread()
+
 	hInst, _, _ := pGetModuleHandle.Call(0)
 	icon, _, _ := pLoadIcon.Call(0, uintptr(IDI_APPLICATION))
 	arrow, _, _ := pLoadCursor.Call(0, uintptr(IDC_ARROW))
