@@ -15,18 +15,22 @@ const (
 	WS_CAPTION     = 0x00C00000
 	WS_SYSMENU     = 0x00080000
 	WS_MINIMIZEBOX = 0x00020000
+	WS_MAXIMIZEBOX = 0x00010000
+	WS_THICKFRAME  = 0x00040000
 	WS_VISIBLE     = 0x10000000
 	WS_CHILD       = 0x40000000
 	WS_TABSTOP     = 0x00010000
+	WS_OVERLAPPEDWINDOW = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX
 
 	BS_DEFPUSHBUTTON = 0x00000001
 	SS_CENTER        = 0x00000001
 
-	WM_COMMAND = 0x0111
-	WM_TIMER   = 0x0113
-	WM_DESTROY  = 0x0002
-	WM_CLOSE    = 0x0010
-	WM_SETFONT  = 0x0030
+	WM_COMMAND       = 0x0111
+	WM_TIMER         = 0x0113
+	WM_GETMINMAXINFO = 0x0024
+	WM_DESTROY        = 0x0002
+	WM_CLOSE          = 0x0010
+	WM_SETFONT        = 0x0030
 
 	MB_OK              = 0x00000000
 	MB_ICONINFORMATION = 0x00000040
@@ -79,6 +83,14 @@ type WNDCLASSEX struct {
 	LpszMenuName  *uint16
 	LpszClassName *uint16
 	HIconSm       syscall.Handle
+}
+
+type MINMAXINFO struct {
+	PtReserved     POINT
+	PtMaxSize      POINT
+	PtMaxPosition  POINT
+	PtMinTrackSize POINT
+	PtMaxTrackSize POINT
 }
 
 var (
@@ -179,6 +191,12 @@ func wndProc(hwnd syscall.Handle, msg uint32, wParam uintptr, lParam uintptr) ui
 		}
 		return 0
 
+	case WM_GETMINMAXINFO:
+		mmi := (*MINMAXINFO)(unsafe.Pointer(lParam))
+		mmi.PtMinTrackSize = POINT{WIN_W, WIN_H}
+		mmi.PtMaxTrackSize = POINT{WIN_W, WIN_H}
+		return 0
+
 	case WM_CLOSE:
 		if running {
 			pKillTimer.Call(uintptr(hwnd), TIMER_ID)
@@ -220,7 +238,7 @@ func main() {
 		0,
 		uintptr(unsafe.Pointer(className)),
 		uintptr(unsafe.Pointer(utf16("Retina Guard"))),
-		WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_MINIMIZEBOX|WS_VISIBLE,
+		WS_OVERLAPPEDWINDOW|WS_VISIBLE,
 		CW_USEDEFAULT, CW_USEDEFAULT, WIN_W, WIN_H,
 		0, 0, hInst, 0,
 	)
