@@ -23,28 +23,16 @@ const (
 	WS_TABSTOP          = 0x00010000
 	WS_OVERLAPPEDWINDOW = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX
 
+	WS_EX_APPWINDOW = 0x00040000
+
 	BS_DEFPUSHBUTTON = 0x00000001
 	SS_CENTER        = 0x00000001
 	CBS_DROPDOWNLIST = 0x00000003
 
-	WM_COMMAND    = 0x0111
-	WM_TIMER      = 0x0113
-	WM_SYSCOMMAND = 0x0112
-	WM_DESTROY     = 0x0002
-	WM_SETFONT     = 0x0030
-
-	SC_MINIMIZE = 0xF020
-	SC_RESTORE  = 0xF120
-
-	SW_HIDE            = 0
-	SW_SHOWNORMAL      = 1
-	SW_SHOWMINIMIZED   = 2
-	SW_SHOWMAXIMIZED   = 3
-	SW_SHOW            = 5
-	SW_MINIMIZE        = 6
-	SW_SHOWMINNOACTIVE = 7
-	SW_RESTORE         = 9
-	SW_SHOWDEFAULT     = 10
+	WM_COMMAND = 0x0111
+	WM_TIMER   = 0x0113
+	WM_DESTROY  = 0x0002
+	WM_SETFONT  = 0x0030
 
 	CBN_SELCHANGE = 1
 
@@ -59,10 +47,10 @@ const (
 	IDC_ARROW       = 32512
 	IDI_APPLICATION = 32512
 
-	SWP_NOZORDER = 0x0004
-
-	SM_CXSCREEN = 0
-	SM_CYSCREEN = 1
+	SW_SHOW        = 5
+	SWP_NOZORDER   = 0x0004
+	SM_CXSCREEN    = 0
+	SM_CYSCREEN    = 1
 
 	ID_LABEL  = 102
 	ID_BTN    = 103
@@ -130,11 +118,11 @@ var (
 )
 
 var (
-	hwndBtn   syscall.Handle
-	hwndLabel syscall.Handle
-	hwndCombo syscall.Handle
-	running   bool
-	remaining int
+	hwndBtn     syscall.Handle
+	hwndLabel   syscall.Handle
+	hwndCombo   syscall.Handle
+	running     bool
+	remaining   int
 	intervalMin = 20
 )
 
@@ -143,9 +131,7 @@ func utf16(s string) *uint16 {
 	return p
 }
 
-func intervalSeconds() int {
-	return intervalMin * 60
-}
+func intervalSeconds() int { return intervalMin * 60 }
 
 func updateUI() {
 	var status string
@@ -172,7 +158,7 @@ func populateCombo() {
 		text := fmt.Sprintf("%d min", v)
 		pSendMessage.Call(uintptr(hwndCombo), 0x0143, uintptr(i), uintptr(unsafe.Pointer(utf16(text))))
 	}
-	pSendMessage.Call(uintptr(hwndCombo), 0x014E, 5, 0)
+	pSendMessage.Call(uintptr(hwndCombo), 0x014E, 5, 0) // select 20 min
 }
 
 func wndProc(hwnd syscall.Handle, msg uint32, wParam uintptr, lParam uintptr) uintptr {
@@ -182,26 +168,25 @@ func wndProc(hwnd syscall.Handle, msg uint32, wParam uintptr, lParam uintptr) ui
 		code := (wParam >> 16) & 0xFFFF
 		ctrlID := wParam & 0xFFFF
 
-		switch ctrlID {
-		case ID_COMBO:
-			if code == CBN_SELCHANGE {
-				if !running {
-					sel, _, _ := pSendMessage.Call(uintptr(hwndCombo), 0x0147, 0, 0)
-					if int(sel) >= 0 && int(sel) < len(intervals) {
-						intervalMin = intervals[sel]
-						remaining = intervalSeconds()
-					}
-				} else {
-					for i, v := range intervals {
-						if v == intervalMin {
-							pSendMessage.Call(uintptr(hwndCombo), 0x014E, uintptr(i), 0)
-							break
-						}
+		if ctrlID == ID_COMBO && code == CBN_SELCHANGE {
+			if !running {
+				sel, _, _ := pSendMessage.Call(uintptr(hwndCombo), 0x0147, 0, 0)
+				if int(sel) >= 0 && int(sel) < len(intervals) {
+					intervalMin = intervals[sel]
+					remaining = intervalSeconds()
+				}
+			} else {
+				for i, v := range intervals {
+					if v == intervalMin {
+						pSendMessage.Call(uintptr(hwndCombo), 0x014E, uintptr(i), 0)
+						break
 					}
 				}
 			}
+			return 0
+		}
 
-		case ID_BTN:
+		if ctrlID == ID_BTN && code == 0 { // BN_CLICKED = 0
 			if running {
 				running = false
 				pKillTimer.Call(uintptr(hwnd), TIMER_ID)
@@ -211,8 +196,9 @@ func wndProc(hwnd syscall.Handle, msg uint32, wParam uintptr, lParam uintptr) ui
 				pSetTimer.Call(uintptr(hwnd), TIMER_ID, 1000, 0)
 			}
 			updateUI()
+			return 0
 		}
-		return 0
+		break
 
 	case WM_TIMER:
 		if wParam == TIMER_ID && running {
@@ -233,17 +219,6 @@ func wndProc(hwnd syscall.Handle, msg uint32, wParam uintptr, lParam uintptr) ui
 			}
 		}
 		return 0
-
-	case WM_SYSCOMMAND:
-		cmd := wParam & 0xFFF0
-		if cmd == SC_MINIMIZE {
-			pShowWindow.Call(uintptr(hwnd), SW_MINIMIZE)
-			return 0
-		}
-		if cmd == SC_RESTORE {
-			pShowWindow.Call(uintptr(hwnd), SW_RESTORE)
-			return 0
-		}
 
 	case WM_DESTROY:
 		if running {
@@ -278,8 +253,9 @@ func main() {
 	}
 	pRegisterClassEx.Call(uintptr(unsafe.Pointer(&wc)))
 
+	// WS_EX_APPWINDOW forces the taskbar to treat this as a standalone app window
 	hwnd, _, _ := pCreateWindowEx.Call(
-		0,
+		WS_EX_APPWINDOW,
 		uintptr(unsafe.Pointer(className)),
 		uintptr(unsafe.Pointer(utf16("Retina Guard"))),
 		WS_OVERLAPPEDWINDOW|WS_VISIBLE,
