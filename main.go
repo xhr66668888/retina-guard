@@ -27,12 +27,24 @@ const (
 	SS_CENTER        = 0x00000001
 	CBS_DROPDOWNLIST = 0x00000003
 
-	WM_COMMAND       = 0x0111
-	WM_TIMER         = 0x0113
-	WM_GETMINMAXINFO = 0x0024
-	WM_DESTROY        = 0x0002
-	WM_CLOSE          = 0x0010
-	WM_SETFONT        = 0x0030
+	WM_COMMAND    = 0x0111
+	WM_TIMER      = 0x0113
+	WM_SYSCOMMAND = 0x0112
+	WM_DESTROY     = 0x0002
+	WM_SETFONT     = 0x0030
+
+	SC_MINIMIZE = 0xF020
+	SC_RESTORE  = 0xF120
+
+	SW_HIDE            = 0
+	SW_SHOWNORMAL      = 1
+	SW_SHOWMINIMIZED   = 2
+	SW_SHOWMAXIMIZED   = 3
+	SW_SHOW            = 5
+	SW_MINIMIZE        = 6
+	SW_SHOWMINNOACTIVE = 7
+	SW_RESTORE         = 9
+	SW_SHOWDEFAULT     = 10
 
 	CBN_SELCHANGE = 1
 
@@ -46,8 +58,6 @@ const (
 
 	IDC_ARROW       = 32512
 	IDI_APPLICATION = 32512
-
-	SW_SHOW = 5
 
 	SWP_NOZORDER = 0x0004
 
@@ -65,7 +75,6 @@ const (
 	WIN_H = 220
 )
 
-// Default intervals in minutes
 var intervals = []int{1, 2, 5, 10, 15, 20, 30, 45, 60}
 
 type POINT struct{ X, Y int32 }
@@ -91,13 +100,6 @@ type WNDCLASSEX struct {
 	LpszClassName *uint16
 	HIconSm       syscall.Handle
 }
-type MINMAXINFO struct {
-	PtReserved     POINT
-	PtMaxSize      POINT
-	PtMaxPosition  POINT
-	PtMinTrackSize POINT
-	PtMaxTrackSize POINT
-}
 
 var (
 	user32   = syscall.NewLazyDLL("user32.dll")
@@ -111,7 +113,6 @@ var (
 	pTranslateMsg     = user32.NewProc("TranslateMessage")
 	pDispatchMsg      = user32.NewProc("DispatchMessageW")
 	pPostQuitMsg      = user32.NewProc("PostQuitMessage")
-	pDestroyWindow    = user32.NewProc("DestroyWindow")
 	pMessageBox       = user32.NewProc("MessageBoxW")
 	pSetTimer         = user32.NewProc("SetTimer")
 	pKillTimer        = user32.NewProc("KillTimer")
@@ -134,7 +135,7 @@ var (
 	hwndCombo syscall.Handle
 	running   bool
 	remaining int
-	intervalMin = 20 // default
+	intervalMin = 20
 )
 
 func utf16(s string) *uint16 {
@@ -169,10 +170,9 @@ func updateUI() {
 func populateCombo() {
 	for i, v := range intervals {
 		text := fmt.Sprintf("%d min", v)
-		pSendMessage.Call(uintptr(hwndCombo), 0x0143, uintptr(i), uintptr(unsafe.Pointer(utf16(text)))) // CB_ADDSTRING
+		pSendMessage.Call(uintptr(hwndCombo), 0x0143, uintptr(i), uintptr(unsafe.Pointer(utf16(text))))
 	}
-	// Select default (20 min = index 5)
-	pSendMessage.Call(uintptr(hwndCombo), 0x014E, 5, 0) // CB_SETCURSEL
+	pSendMessage.Call(uintptr(hwndCombo), 0x014E, 5, 0)
 }
 
 func wndProc(hwnd syscall.Handle, msg uint32, wParam uintptr, lParam uintptr) uintptr {
@@ -185,15 +185,13 @@ func wndProc(hwnd syscall.Handle, msg uint32, wParam uintptr, lParam uintptr) ui
 		switch ctrlID {
 		case ID_COMBO:
 			if code == CBN_SELCHANGE {
-				// Only allow change when not running
 				if !running {
-					sel, _, _ := pSendMessage.Call(uintptr(hwndCombo), 0x0147, 0, 0) // CB_GETCURSEL
+					sel, _, _ := pSendMessage.Call(uintptr(hwndCombo), 0x0147, 0, 0)
 					if int(sel) >= 0 && int(sel) < len(intervals) {
 						intervalMin = intervals[sel]
 						remaining = intervalSeconds()
 					}
 				} else {
-					// Revert selection while running
 					for i, v := range intervals {
 						if v == intervalMin {
 							pSendMessage.Call(uintptr(hwndCombo), 0x014E, uintptr(i), 0)
@@ -236,11 +234,16 @@ func wndProc(hwnd syscall.Handle, msg uint32, wParam uintptr, lParam uintptr) ui
 		}
 		return 0
 
-	case WM_GETMINMAXINFO:
-		mmi := (*MINMAXINFO)(unsafe.Pointer(lParam))
-		mmi.PtMinTrackSize = POINT{int32(WIN_W), int32(WIN_H)}
-		mmi.PtMaxTrackSize = POINT{int32(WIN_W), int32(WIN_H)}
-		return 0
+	case WM_SYSCOMMAND:
+		cmd := wParam & 0xFFF0
+		if cmd == SC_MINIMIZE {
+			pShowWindow.Call(uintptr(hwnd), SW_MINIMIZE)
+			return 0
+		}
+		if cmd == SC_RESTORE {
+			pShowWindow.Call(uintptr(hwnd), SW_RESTORE)
+			return 0
+		}
 
 	case WM_DESTROY:
 		if running {
@@ -284,7 +287,6 @@ func main() {
 		0, 0, hInst, 0,
 	)
 
-	// Status label
 	label, _, _ := pCreateWindowEx.Call(
 		0,
 		uintptr(unsafe.Pointer(utf16("STATIC"))),
@@ -295,7 +297,6 @@ func main() {
 	)
 	hwndLabel = syscall.Handle(label)
 
-	// "Interval:" label
 	pCreateWindowEx.Call(
 		0,
 		uintptr(unsafe.Pointer(utf16("STATIC"))),
@@ -305,7 +306,6 @@ func main() {
 		uintptr(hwnd), ID_LBLINT, hInst, 0,
 	)
 
-	// Dropdown combobox for interval selection
 	combo, _, _ := pCreateWindowEx.Call(
 		0,
 		uintptr(unsafe.Pointer(utf16("COMBOBOX"))),
@@ -317,7 +317,6 @@ func main() {
 	hwndCombo = syscall.Handle(combo)
 	populateCombo()
 
-	// Start/Stop button
 	btn, _, _ := pCreateWindowEx.Call(
 		0,
 		uintptr(unsafe.Pointer(utf16("BUTTON"))),
@@ -328,12 +327,10 @@ func main() {
 	)
 	hwndBtn = syscall.Handle(btn)
 
-	// Apply font
 	pSendMessage.Call(uintptr(hwndBtn), WM_SETFONT, font, 0)
 	pSendMessage.Call(uintptr(hwndLabel), WM_SETFONT, font, 0)
 	pSendMessage.Call(uintptr(hwndCombo), WM_SETFONT, font, 0)
 
-	// Center window
 	screenW, _, _ := pGetSystemMetrics.Call(SM_CXSCREEN)
 	screenH, _, _ := pGetSystemMetrics.Call(SM_CYSCREEN)
 	x := (int(screenW) - WIN_W) / 2
@@ -343,7 +340,6 @@ func main() {
 	pShowWindow.Call(uintptr(hwnd), SW_SHOW)
 	pUpdateWindow.Call(uintptr(hwnd))
 
-	// Message loop
 	var msg MSG
 	for {
 		ret, _, _ := pGetMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
@@ -356,4 +352,3 @@ func main() {
 
 	syscall.Exit(0)
 }
-
