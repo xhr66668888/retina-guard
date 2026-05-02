@@ -176,18 +176,21 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
             case "DONE", "START_BREAK":
                 store.recordCompleted()
                 store.resetAccumulatedMs()
+                let due = Date().addingTimeInterval(Double(store.settings.intervalMinutes) * 60)
+                store.setNextDueAt(due)
+                AlarmScheduler.shared.scheduleNextBreak()
             case "SNOOZE":
                 store.clearReminderOutstanding()
                 store.resetAccumulatedMs()
                 let due = Date().addingTimeInterval(Double(store.settings.snoozeMinutes) * 60)
                 store.setNextDueAt(due)
-                scheduleBreakReminder(at: due, settings: store.settings)
+                AlarmScheduler.shared.scheduleNextBreak()
             case "SKIP":
                 store.recordSkipped()
                 store.resetAccumulatedMs()
                 let due = Date().addingTimeInterval(Double(store.settings.intervalMinutes) * 60)
                 store.setNextDueAt(due)
-                scheduleBreakReminder(at: due, settings: store.settings)
+                AlarmScheduler.shared.scheduleNextBreak()
             default:
                 break
             }

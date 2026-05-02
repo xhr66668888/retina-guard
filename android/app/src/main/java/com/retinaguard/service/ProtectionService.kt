@@ -143,6 +143,8 @@ class ProtectionService : Service() {
                     if (remainingMs <= 0) {
                         prefs.resetAccumulatedScreenMs()
                         triggerBreak()
+                        tracker.stop()
+                        tracker.start(0L, settings.excludedPackages)
                         delay(2_000L)
                         continue
                     }
@@ -165,6 +167,7 @@ class ProtectionService : Service() {
                     }
 
                     if (remainingSec <= 0) {
+                        triggerBreak()
                         delay(2_000L)
                         continue
                     }

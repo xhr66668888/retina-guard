@@ -24,9 +24,13 @@ struct BreakView: View {
 
                 Spacer()
 
-                HStack(spacing: 12) {
-                    GhostRectangleButton(text: "Skip") { onSkip() }
+                VStack(spacing: 12) {
                     RedPillButton(text: "Done", enabled: true) { onDone() }
+
+                    HStack(spacing: 12) {
+                        GhostRectangleButton(text: "Snooze \(store.settings.snoozeMinutes)m") { onSnooze() }
+                        GhostRectangleButton(text: "Skip") { onSkip() }
+                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 48)
@@ -49,6 +53,20 @@ struct BreakView: View {
         store.recordCompleted()
         store.resetAccumulatedMs()
         NotificationManager.shared.cancelBreak()
+        let due = Date().addingTimeInterval(Double(store.settings.intervalMinutes) * 60)
+        store.setNextDueAt(due)
+        AlarmScheduler.shared.scheduleNextBreak()
+        dismiss()
+    }
+
+    private func onSnooze() {
+        timer?.invalidate()
+        store.clearReminderOutstanding()
+        store.resetAccumulatedMs()
+        NotificationManager.shared.cancelBreak()
+        let due = Date().addingTimeInterval(Double(store.settings.snoozeMinutes) * 60)
+        store.setNextDueAt(due)
+        AlarmScheduler.shared.scheduleNextBreak()
         dismiss()
     }
 
@@ -57,6 +75,9 @@ struct BreakView: View {
         store.recordSkipped()
         store.resetAccumulatedMs()
         NotificationManager.shared.cancelBreak()
+        let due = Date().addingTimeInterval(Double(store.settings.intervalMinutes) * 60)
+        store.setNextDueAt(due)
+        AlarmScheduler.shared.scheduleNextBreak()
         dismiss()
     }
 }

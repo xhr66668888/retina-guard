@@ -1,137 +1,201 @@
 package main
 
-import (
-	"fmt"
-	"os"
-	"os/exec"
-	"os/signal"
-	"syscall"
-	"time"
-)
+/*
+#cgo CFLAGS: -x objective-c -fobjc-arc
+#cgo LDFLAGS: -framework Cocoa
 
-var intervals = []int{1, 2, 5, 10, 15, 20, 30, 45, 60}
+#import <Cocoa/Cocoa.h>
+
+// ──── Global state ────
+static NSWindow      *gWindow;
+static NSTextField   *gLabel;
+static NSPopUpButton *gCombo;
+static NSButton      *gBtn;
+static NSTimer       *gTimer;
+
+static int  gIntervals[]  = {1, 2, 5, 10, 15, 20, 30, 45, 60};
+static int  gIntervalCount = 9;
+static int  gIntervalMin  = 20;
+static int  gRemaining    = 0;
+static BOOL gRunning      = NO;
+
+// ──── App Controller ────
+@interface RGController : NSObject <NSApplicationDelegate>
+- (void)buildWindow;
+- (void)updateUI;
+@end
+
+@implementation RGController
+
+- (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)app {
+    return YES;
+}
+
+- (void)applicationDidFinishLaunching:(NSNotification *)n {
+    [self buildWindow];
+    [self updateUI];
+}
+
+- (void)buildWindow {
+    NSUInteger mask = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable;
+    gWindow = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 360, 220)
+                                          styleMask:mask
+                                            backing:NSBackingStoreBuffered
+                                              defer:NO];
+    [gWindow setTitle:@"Retina Guard"];
+    [gWindow center];
+    NSView *v = [gWindow contentView];
+
+    // Status label
+    gLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 155, 320, 28)];
+    [gLabel setStringValue:@"Click Start to begin"];
+    [gLabel setBezeled:NO];
+    [gLabel setDrawsBackground:NO];
+    [gLabel setEditable:NO];
+    [gLabel setSelectable:NO];
+    [gLabel setAlignment:NSTextAlignmentCenter];
+    [gLabel setFont:[NSFont systemFontOfSize:16 weight:NSFontWeightMedium]];
+    [v addSubview:gLabel];
+
+    // "Interval:" label
+    NSTextField *lbl = [[NSTextField alloc] initWithFrame:NSMakeRect(50, 115, 80, 24)];
+    [lbl setStringValue:@"Interval:"];
+    [lbl setBezeled:NO];
+    [lbl setDrawsBackground:NO];
+    [lbl setEditable:NO];
+    [lbl setSelectable:NO];
+    [lbl setAlignment:NSTextAlignmentRight];
+    [lbl setFont:[NSFont systemFontOfSize:13]];
+    [v addSubview:lbl];
+
+    // Interval popup button
+    gCombo = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(140, 115, 160, 28) pullsDown:NO];
+    for (int i = 0; i < gIntervalCount; i++) {
+        [gCombo addItemWithTitle:[NSString stringWithFormat:@"%d min", gIntervals[i]]];
+    }
+    [gCombo selectItemAtIndex:5]; // default 20 min
+    [gCombo setTarget:self];
+    [gCombo setAction:@selector(comboChanged:)];
+    [v addSubview:gCombo];
+
+    // Start/Stop button
+    gBtn = [[NSButton alloc] initWithFrame:NSMakeRect(100, 50, 160, 44)];
+    [gBtn setTitle:@"Start"];
+    [gBtn setBezelStyle:NSBezelStyleRounded];
+    [gBtn setTarget:self];
+    [gBtn setAction:@selector(buttonClicked:)];
+    [gBtn setFont:[NSFont systemFontOfSize:14 weight:NSFontWeightMedium]];
+    [v addSubview:gBtn];
+
+    [gWindow makeKeyAndOrderFront:nil];
+    [NSApp activateIgnoringOtherApps:YES];
+}
+
+- (void)updateUI {
+    if (gRunning) {
+        int m = gRemaining / 60;
+        int s = gRemaining % 60;
+        [gLabel setStringValue:[NSString stringWithFormat:@"Next reminder in %02d:%02d", m, s]];
+        [gBtn setTitle:@"Stop"];
+    } else {
+        [gLabel setStringValue:@"Click Start to begin"];
+        [gBtn setTitle:@"Start"];
+    }
+}
+
+- (void)buttonClicked:(id)sender {
+    if (gRunning) {
+        gRunning = NO;
+        [gTimer invalidate];
+        gTimer = nil;
+    } else {
+        gRunning = YES;
+        gRemaining = gIntervalMin * 60;
+        gTimer = [NSTimer scheduledTimerWithTimeInterval:1.0
+                          target:self
+                          selector:@selector(timerFired:)
+                          userInfo:nil
+                          repeats:YES];
+    }
+    [self updateUI];
+}
+
+- (void)comboChanged:(id)sender {
+    if (!gRunning) {
+        NSInteger idx = [gCombo indexOfSelectedItem];
+        if (idx >= 0 && idx < gIntervalCount) {
+            gIntervalMin = gIntervals[idx];
+        }
+    } else {
+        // Revert selection while running
+        for (int i = 0; i < gIntervalCount; i++) {
+            if (gIntervals[i] == gIntervalMin) {
+                [gCombo selectItemAtIndex:i];
+                break;
+            }
+        }
+    }
+}
+
+- (void)timerFired:(NSTimer *)t {
+    if (!gRunning) return;
+    gRemaining--;
+    if (gRemaining <= 0) {
+        gRemaining = gIntervalMin * 60;
+        [self updateUI];
+
+        // Play Glass sound
+        NSSound *sound = [NSSound soundNamed:@"Glass"];
+        [sound play];
+
+        // Show blocking alert (mirrors Windows MessageBox behavior)
+        NSAlert *alert = [[NSAlert alloc] init];
+        [alert setMessageText:@"Retina Guard"];
+        [alert setInformativeText:@"Please look at something 20 feet away for 20 seconds."];
+        [alert setAlertStyle:NSAlertStyleInformational];
+        [alert addButtonWithTitle:@"OK"];
+        [alert runModal];
+
+        // Reset after user clicks OK
+        gRemaining = gIntervalMin * 60;
+        [self updateUI];
+    } else {
+        [self updateUI];
+    }
+}
+
+@end
+
+// Keep a strong reference so ARC doesn't release it
+static RGController *gController;
+
+static void run(void) {
+    @autoreleasepool {
+        [NSApplication sharedApplication];
+        [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+
+        // Menu bar
+        NSMenu *menuBar = [[NSMenu alloc] init];
+        NSMenuItem *appMenuItem = [[NSMenuItem alloc] init];
+        [menuBar addItem:appMenuItem];
+        [NSApp setMainMenu:menuBar];
+        NSMenu *appMenu = [[NSMenu alloc] initWithTitle:@"Retina Guard"];
+        [appMenu addItemWithTitle:@"Quit Retina Guard"
+                           action:@selector(terminate:)
+                    keyEquivalent:@"q"];
+        [appMenuItem setSubmenu:appMenu];
+
+        gController = [[RGController alloc] init];
+        [NSApp setDelegate:gController];
+        [NSApp run];
+    }
+}
+*/
+import "C"
+
+import "runtime"
 
 func main() {
-	intervalMin := 20
-	running := false
-	var remaining int
-
-	fmt.Println("\033[1;31m╔══════════════════════════════════════╗\033[0m")
-	fmt.Println("\033[1;31m║          RETINA GUARD                ║\033[0m")
-	fmt.Println("\033[1;31m╚══════════════════════════════════════╝\033[0m")
-	fmt.Println()
-	fmt.Println("  Protect your eyes — 20-20-20 rule")
-	fmt.Println()
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-
-	inputCh := make(chan string)
-	go readInput(inputCh)
-
-	printMenu(intervalMin)
-
-	ticker := time.NewTicker(1 * time.Second)
-	ticker.Stop()
-
-	for {
-		select {
-		case <-sigCh:
-			fmt.Println("\n\033[90mGoodbye!\033[0m")
-			return
-		case input := <-inputCh:
-			switch input {
-			case "s", "S", "start":
-				if !running {
-					running = true
-					remaining = intervalMin * 60
-					ticker = time.NewTicker(1 * time.Second)
-					fmt.Printf("\n\033[32m▶ Protection started\033[0m — interval: %d min\n\n", intervalMin)
-					printCountdown(remaining)
-				}
-			case "x", "X", "stop":
-				if running {
-					running = false
-					ticker.Stop()
-					fmt.Println("\n\033[33m■ Protection stopped\033[0m")
-					fmt.Println()
-				}
-			case "q", "Q", "quit":
-				fmt.Println("\n\033[90mGoodbye!\033[0m")
-				return
-			case "h", "H", "help":
-				printMenu(intervalMin)
-			default:
-				if !running {
-					for _, v := range intervals {
-						if fmt.Sprintf("%d", v) == input {
-							intervalMin = v
-							fmt.Printf("\n\033[36mInterval set to %d min\033[0m\n\n", intervalMin)
-							break
-						}
-					}
-				}
-			}
-		case <-ticker.C:
-			if running {
-				remaining--
-				printCountdown(remaining)
-				if remaining <= 0 {
-					remaining = intervalMin * 60
-					showNotification()
-					playSound()
-					fmt.Println("\n\033[1;33m  ⏰ TIME TO LOOK AWAY!\033[0m")
-					fmt.Println("  Look at something 20 feet away for 20 seconds.")
-					fmt.Println()
-				}
-			}
-		}
-	}
-}
-
-func printCountdown(sec int) {
-	m := sec / 60
-	s := sec % 60
-	fmt.Printf("\r\033[36m  Next break in \033[1m%02d:%02d\033[0m  ", m, s)
-}
-
-func printMenu(interval int) {
-	fmt.Println("  \033[1mCommands:\033[0m")
-	fmt.Println("    \033[32ms\033[0m / start    — Start protection")
-	fmt.Println("    \033[33mx\033[0m / stop     — Stop protection")
-	fmt.Printf("    \033[36m1-60\033[0m          — Set interval (current: %d min)\n", interval)
-	fmt.Println("    \033[90mq\033[0m / quit     — Exit")
-	fmt.Println("    \033[90mh\033[0m / help     — Show this menu")
-	fmt.Println()
-}
-
-func readInput(ch chan string) {
-	buf := make([]byte, 128)
-	for {
-		n, err := os.Stdin.Read(buf)
-		if err != nil || n == 0 {
-			continue
-		}
-		input := string(buf[:n])
-		// trim newline/spaces
-		for len(input) > 0 && (input[len(input)-1] == '\n' || input[len(input)-1] == '\r' || input[len(input)-1] == ' ') {
-			input = input[:len(input)-1]
-		}
-		if len(input) > 0 {
-			ch <- input
-		}
-	}
-}
-
-func showNotification() {
-	title := "Retina Guard"
-	msg := "Look at something 20 feet away for 20 seconds."
-	script := fmt.Sprintf(`display notification "%s" with title "%s" sound name "Glass"`, msg, title)
-	cmd := exec.Command("osascript", "-e", script)
-	cmd.Run()
-}
-
-func playSound() {
-	cmd := exec.Command("afplay", "/System/Library/Sounds/Glass.aiff")
-	cmd.Run()
+	runtime.LockOSThread()
+	C.run()
 }

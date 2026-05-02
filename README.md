@@ -112,36 +112,33 @@ open RetinaGuard.xcodeproj
 
 ## macOS
 
-**Language:** Go 1.22+ · **UI:** Terminal · **Deps:** None
+**Language:** Go 1.22+ · **UI:** Native Cocoa (AppKit via cgo) · **Deps:** None
 
 ### Features
 
-- Terminal UI with colored output
-- Configurable interval (1–60 min)
-- Native macOS notifications via `osascript`
-- Glass sound effect via `afplay`
-- Start/stop/interval commands
+- Native macOS window with interval selector and start/stop button
+- Configurable interval (1–60 min) via dropdown
+- Blocking `NSAlert` reminder (topmost, like Windows `MessageBox`)
+- Glass sound effect via `NSSound`
+- Quit via ⌘Q or close window
 
 ### Build
 
 ```bash
 cd mac/
-# On Mac:
+# On Mac (requires Xcode Command Line Tools for cgo):
 go build -o retina-guard .
-
-# Cross-compile from Linux:
-GOOS=darwin GOARCH=amd64 go build -o retina-guard-mac .
-GOOS=darwin GOARCH=arm64 go build -o retina-guard-mac-arm64 .
 ```
+
+> **Note:** This version uses cgo with Objective-C and cannot be cross-compiled from Linux.
+> To cross-compile, install a macOS cross-compilation toolchain.
 
 ### Run
 
 ```bash
-chmod +x retina-guard-mac
+chmod +x retina-guard
 ./retina-guard
 ```
-
-Commands: `s`/start, `x`/stop, `1-60` set interval, `q`/quit, `h`/help
 
 ### Build .app bundle and DMG
 
