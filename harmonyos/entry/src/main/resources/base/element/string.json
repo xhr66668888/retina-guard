@@ -1,0 +1,8 @@
+{
+  "string": [
+    { "name": "module_desc", "value": "Eye protection reminder" },
+    { "name": "entry_name", "value": "Retina Guard" },
+    { "name": "reminder_reason", "value": "Required to show break reminders on time" },
+    { "name": "background_reason", "value": "Required to keep countdown running in background" }
+  ]
+}

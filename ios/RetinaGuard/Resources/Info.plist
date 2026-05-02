@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- App info -->
+    <key>CFBundleName</key>
+    <string>Retina Guard</string>
+    <key>CFBundleDisplayName</key>
+    <string>Retina Guard</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.retinaguard.app</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <false/>
+    </dict>
+    <key>UILaunchScreen</key>
+    <dict>
+        <key>UIColorName</key>
+        <string>LaunchScreenBackground</string>
+    </dict>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
+    <key>UIRequiredDeviceCapabilities</key>
+    <array>
+        <string>arm64</string>
+    </array>
+
+    <!-- Background modes -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>fetch</string>
+        <string>processing</string>
+    </array>
+
+    <!-- BGTaskScheduler identifiers -->
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>com.retinaguard.refresh</string>
+    </array>
+
+    <!-- Permission usage descriptions (iOS requires these) -->
+
+    <!--
+        iOS Permission Model (per Apple Human Interface Guidelines & developer docs):
+
+        1. NOTIFICATIONS (UNUserNotificationCenter)
+           - Requires user authorization via requestAuthorization()
+           - User can deny, allow, or configure granularly in Settings
+           - No Info.plist key needed for basic notifications (iOS 12+)
+           - Critical alerts require special entitlement from Apple
+
+        2. BACKGROUND APP REFRESH (BGTaskScheduler)
+           - Requires "fetch" and "processing" in UIBackgroundModes
+           - User controls globally and per-app in Settings > General
+           - iOS may defer or skip tasks based on system conditions
+           - Low Power Mode disables background refresh entirely
+
+        3. SCREEN TIME / FAMILY CONTROLS
+           - DeviceActivityMonitor framework requires Family Controls entitlement
+           - Must apply to Apple for entitlement; not available to all developers
+           - We use foreground time tracking as fallback (no entitlement needed)
+
+        4. NO EQUIVALENT FOR:
+           - Android SCHEDULE_EXACT_ALARM (iOS uses UNTimeIntervalNotificationTrigger)
+           - Android SYSTEM_ALERT_WINDOW (no overlay on iOS)
+           - Android ACCESS_NOTIFICATION_POLICY / DND bypass
+           - Android REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+
+        5. iOS-SPECIFIC CONSIDERATIONS:
+           - App is suspended ~10s after backgrounding unless using background tasks
+           - Timer.publish stops when app is suspended; use notifications for reminders
+           - UIApplication.beginBackgroundTask gives ~30s of extra background time
+           - Foreground-only timer is sufficient for usage-aware mode
+    -->
+</dict>
+</plist>

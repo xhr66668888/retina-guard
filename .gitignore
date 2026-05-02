@@ -1,2 +1,19 @@
-retina-guard.exe
-*.exe
+# Go build cache
+*.test
+*.prof
+
+# Android build
+android/.gradle/
+android/app/build/
+android/local.properties
+android/build/
+android/.kotlin/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# macOS
+.DS_Store
+*.dmg-staging/

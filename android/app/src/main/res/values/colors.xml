@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="brand_red">#E60000</color>
+    <color name="brand_red_deep">#AC1811</color>
+    <color name="canvas_white">#FFFFFFFF</color>
+    <color name="charcoal">#FF25282B</color>
+    <color name="light_neutral">#FFF2F2F2</color>
+    <color name="secondary_grey">#FF7E7E7E</color>
+    <color name="signal_blue">#FF3860BE</color>
+</resources>

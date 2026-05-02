@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Retina Guard's design system is white-canvas regardless of OS dark mode. -->
+    <style name="Theme.RetinaGuard" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/canvas_white</item>
+        <item name="android:navigationBarColor">@color/canvas_white</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
+        <item name="android:windowBackground">@color/canvas_white</item>
+        <item name="android:colorBackground">@color/canvas_white</item>
+        <item name="android:textColor">@color/charcoal</item>
+    </style>
+
+    <style name="Theme.RetinaGuard.Break" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@color/charcoal</item>
+        <item name="android:navigationBarColor">@color/charcoal</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
+        <item name="android:windowBackground">@color/charcoal</item>
+        <item name="android:colorBackground">@color/charcoal</item>
+        <item name="android:textColor">@color/canvas_white</item>
+    </style>
+</resources>
