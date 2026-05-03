@@ -4,6 +4,7 @@ import BackgroundTasks
 
 /// Schedules notifications that fire when break is due —
 /// port of Android AlarmScheduler + AlarmReceiver.
+@MainActor
 final class AlarmScheduler {
 
     static let shared = AlarmScheduler()
@@ -21,7 +22,17 @@ final class AlarmScheduler {
 
         // Cancel existing pending break and reschedule
         notifMgr.cancelBreak()
-        notifMgr.scheduleBreakReminder(at: due, settings: store.settings)
+        notifMgr.scheduleBreakReminder(
+            at: due,
+            settings: store.settings,
+            repeats: shouldUseRepeatingReminder(for: due)
+        )
+
+        if store.session.reminderOutstanding {
+            LiveActivityManager.shared.showBreakDue(settings: store.settings)
+        } else {
+            LiveActivityManager.shared.updateCountdown(nextDueAt: due, settings: store.settings)
+        }
 
         // Also register a BGAppRefreshTask as a fallback
         scheduleBackgroundRefresh(at: due)
@@ -66,6 +77,7 @@ final class AlarmScheduler {
         }
 
         store.markReminderShown()
+        LiveActivityManager.shared.showBreakDue(settings: store.settings)
         notifMgr.postBreakReminder(settings: store.settings)
 
         // Schedule next cycle
@@ -79,7 +91,18 @@ final class AlarmScheduler {
 
     func cancelAll() {
         notifMgr.cancelAll()
+        LiveActivityManager.shared.end()
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: "com.retinaguard.refresh")
+    }
+
+    private func shouldUseRepeatingReminder(for due: Date) -> Bool {
+        guard !store.settings.quietHoursEnabled, !store.settings.dailyScheduleEnabled else {
+            return false
+        }
+
+        let expectedInterval = Double(store.settings.intervalMinutes) * 60
+        let actualInterval = due.timeIntervalSinceNow
+        return abs(actualInterval - expectedInterval) < 10
     }
 
     // MARK: - Background refresh (best-effort on iOS)

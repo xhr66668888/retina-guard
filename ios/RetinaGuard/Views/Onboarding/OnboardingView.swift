@@ -4,6 +4,8 @@ struct OnboardingView: View {
     @EnvironmentObject var store: PreferencesStore
     @State private var notifGranted = false
     @State private var bgGranted = false
+    @State private var timeSensitiveGranted = false
+    @State private var liveActivityGranted = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,8 +49,27 @@ struct OnboardingView: View {
                         actionLabel: "Allow"
                     ) {
                         Task {
-                            notifGranted = await PermissionManager.shared.requestNotifications()
+                            _ = await PermissionManager.shared.requestNotifications()
+                            await refreshPermissions()
                         }
+                    }
+
+                    ChecklistRow(
+                        title: "Time-sensitive alerts",
+                        description: "Allows reminders to break through Focus and summaries.",
+                        granted: perms.timeSensitive,
+                        actionLabel: "Open Settings"
+                    ) {
+                        PermissionManager.shared.openNotificationSettings()
+                    }
+
+                    ChecklistRow(
+                        title: "Live Activity",
+                        description: "Shows a real-time countdown on the Lock Screen and Dynamic Island.",
+                        granted: perms.liveActivities,
+                        actionLabel: "Open Settings"
+                    ) {
+                        PermissionManager.shared.openAppSettings()
                     }
 
                     ChecklistRow(
@@ -86,9 +107,7 @@ struct OnboardingView: View {
         }
         .background(Color.white)
         .task {
-            let perms = await PermissionState.read()
-            notifGranted = perms.notifications
-            bgGranted = perms.backgroundRefresh
+            await refreshPermissions()
         }
     }
 
@@ -96,8 +115,18 @@ struct OnboardingView: View {
         var p = PermissionState()
         p.notifications = notifGranted
         p.backgroundRefresh = bgGranted
+        p.timeSensitive = timeSensitiveGranted
+        p.liveActivities = liveActivityGranted
         return p
     }
 
     private var ready: Bool { notifGranted }
+
+    private func refreshPermissions() async {
+        let perms = await PermissionState.read()
+        notifGranted = perms.notifications
+        bgGranted = perms.backgroundRefresh
+        timeSensitiveGranted = perms.timeSensitive
+        liveActivityGranted = perms.liveActivities
+    }
 }

@@ -12,8 +12,8 @@ Available on **Android**, **iOS**, **macOS**, **Windows**, and **HarmonyOS**.
 retina-guard/
 ├── android/        Android app (Kotlin, Jetpack Compose)
 ├── ios/            iOS app (Swift, SwiftUI)
-├── mac/            macOS desktop app (Go)
-├── windows/        Windows desktop app (Go, Win32 API)
+├── mac/            macOS desktop app (Objective-C, AppKit; arm64 + x64 packages)
+├── windows/        Windows desktop app (Go, Win32 API; x64 + arm64 packages)
 └── harmonyos/      HarmonyOS app (ArkTS, ArkUI)
 ```
 
@@ -67,21 +67,24 @@ cd android/
 
 ## iOS
 
-**Language:** Swift 5.9 · **UI:** SwiftUI · **Min iOS:** 16.0
+**Language:** Swift 6 · **UI:** SwiftUI + ActivityKit · **Min iOS:** 16.2
 
 ### Features
 
 - `UNUserNotificationCenter` with time-sensitive break reminders
+- Live Activity countdown on the Lock Screen and Dynamic Island
+- Prominent break alerts with bundled alarm sound, vibration path, and Done/Snooze/Skip actions
 - `BGAppRefreshTaskRequest` for background countdown (best-effort)
 - Foreground usage-aware tracking via `scenePhase`
 - Quiet hours and daily schedule
 - Notification action buttons (Done, Snooze, Skip)
 - Full-screen dark break screen
 - iOS-specific battery/background tips in settings
+- Android/iOS acceptance notes: [`ios/PARITY.md`](ios/PARITY.md)
 
 ### Prerequisites
 
-- macOS with **Xcode 15+**
+- macOS with **Xcode 16+**
 - Apple Developer account (for device testing)
 
 ### Build
@@ -101,10 +104,10 @@ open RetinaGuard.xcodeproj
 | `POST_NOTIFICATIONS` | `requestAuthorization(.alert, .sound, .badge)` | User prompt, no plist key needed |
 | `SCHEDULE_EXACT_ALARM` | `UNTimeIntervalNotificationTrigger` | OS-managed, no special permission |
 | `FOREGROUND_SERVICE` | `Timer.publish` + `scenePhase` | Timer pauses on background |
-| `RUNNING_BACKGROUND` | `BGAppRefreshTask` + UIBackgroundModes | Best-effort, OS may skip |
+| `RUNNING_BACKGROUND` | Live Activity + `BGAppRefreshTask` + UIBackgroundModes | Live Activity keeps visible countdown; BG refresh is best-effort |
 | `PACKAGE_USAGE_STATS` | `DeviceActivityMonitor` (needs entitlement) | Requires Apple approval; fallback to foreground tracking |
 | `SYSTEM_ALERT_WINDOW` | Not available | iOS does not support overlays |
-| `USE_FULL_SCREEN_INTENT` | `UNNotificationInterruptionLevel.timeSensitive` | No full-screen alarm on iOS |
+| `USE_FULL_SCREEN_INTENT` | `UNNotificationInterruptionLevel.timeSensitive` + Live Activity alert update | No Android-style full-screen alarm on iOS |
 | `ACCESS_NOTIFICATION_POLICY` | Focus / DND whitelist | Guide user to add app to allowed list |
 | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Not available | Guide user to disable Low Power Mode |
 
@@ -112,7 +115,7 @@ open RetinaGuard.xcodeproj
 
 ## macOS
 
-**Language:** Go 1.22+ · **UI:** Native Cocoa (AppKit via cgo) · **Deps:** None
+**Language:** Objective-C · **UI:** Native Cocoa/AppKit · **Deps:** None · **CPU:** Apple Silicon arm64 + Intel x64
 
 ### Features
 
@@ -126,28 +129,37 @@ open RetinaGuard.xcodeproj
 
 ```bash
 cd mac/
-# On Mac (requires Xcode Command Line Tools for cgo):
-go build -o retina-guard .
+# On Apple Silicon Mac (requires Xcode Command Line Tools):
+./build-all.sh
 ```
 
-> **Note:** This version uses cgo with Objective-C and cannot be cross-compiled from Linux.
-> To cross-compile, install a macOS cross-compilation toolchain.
+Outputs:
+
+| Target | Folder | Artifact |
+|---|---|---|
+| Apple Silicon Mac | `mac/arm64/` | `RetinaGuard-mac-arm64.dmg` |
+| Intel Mac | `mac/x64/` | `RetinaGuard-mac-x64.dmg` |
+
+`mac/build-dmg.sh` is kept as a compatibility wrapper and also builds both packages.
+The legacy root artifact `mac/RetinaGuard.dmg` is kept as the Apple Silicon build.
+This version builds with Apple clang and AppKit, so it must be built on macOS.
 
 ### Run
 
 ```bash
-chmod +x retina-guard
-./retina-guard
+open RetinaGuard.app
 ```
 
 ### Build .app bundle and DMG
 
-The `mac/` folder includes a pre-built `RetinaGuard.app` and `build-dmg.sh`:
+The `mac/` folder includes pre-built architecture-specific app bundles and build scripts:
 
 ```bash
 cd mac/
-./build-dmg.sh          # Creates RetinaGuard.dmg (requires macOS)
+./build-all.sh
 ```
+
+The DMG build scripts verify the requested architecture and apply a local ad-hoc signature. For public distribution, build with `SIGN_IDENTITY="Developer ID Application: ..."` and notarize the DMG with Apple.
 
 ---
 
@@ -171,9 +183,18 @@ cd windows/
 # On Windows:
 go build -o retina-guard.exe .
 
-# Cross-compile from Linux/Mac:
-GOOS=windows GOARCH=amd64 go build -o retina-guard.exe .
+# Cross-compile both 64-bit packages from Linux/Mac:
+./build-all.sh
 ```
+
+Outputs:
+
+| Target | Folder | Artifact |
+|---|---|---|
+| x86 PC | `windows/x64/` | `retina-guard-windows-x64.exe` |
+| Windows on ARM | `windows/arm64/` | `retina-guard-windows-arm64.exe` |
+
+The legacy root artifact `windows/retina-guard.exe` is kept as the x64 Windows build.
 
 ### Run
 

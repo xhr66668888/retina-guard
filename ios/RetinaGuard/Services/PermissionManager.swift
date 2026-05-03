@@ -1,4 +1,5 @@
 import Foundation
+import ActivityKit
 import UserNotifications
 import UIKit
 
@@ -16,32 +17,46 @@ import UIKit
 struct PermissionState {
     var notifications: Bool     = false
     var backgroundRefresh: Bool = false
+    var timeSensitive: Bool     = false
+    var liveActivities: Bool    = false
 
     static func read() async -> PermissionState {
-        var ps = PermissionState()
-
         // Notification authorization
         let settings = await UNUserNotificationCenter.current().notificationSettings()
-        ps.notifications = settings.authorizationStatus == .authorized
+        let notifications = settings.authorizationStatus == .authorized
+        let timeSensitive = settings.timeSensitiveSetting == .enabled
 
         // Background app refresh
-        await MainActor.run {
-            ps.backgroundRefresh = UIApplication.shared.backgroundRefreshStatus == .available
+        let (backgroundRefresh, liveActivities) = await MainActor.run {
+            (
+                UIApplication.shared.backgroundRefreshStatus == .available,
+                LiveActivityManager.shared.isEnabled
+            )
         }
 
-        return ps
+        return PermissionState(
+            notifications: notifications,
+            backgroundRefresh: backgroundRefresh,
+            timeSensitive: timeSensitive,
+            liveActivities: liveActivities
+        )
     }
 
     var readyForBasic: Bool { notifications }
+    var ready: Bool { readyCount == totalCount }
 
     var readyCount: Int {
-        (notifications ? 1 : 0) + (backgroundRefresh ? 1 : 0)
+        (notifications ? 1 : 0) +
+        (timeSensitive ? 1 : 0) +
+        (liveActivities ? 1 : 0) +
+        (backgroundRefresh ? 1 : 0)
     }
 
-    var totalCount: Int { 2 }
+    var totalCount: Int { 4 }
 }
 
 /// Permission request helpers
+@MainActor
 final class PermissionManager {
 
     static let shared = PermissionManager()
@@ -52,7 +67,7 @@ final class PermissionManager {
     func requestNotifications() async -> Bool {
         do {
             let granted = try await UNUserNotificationCenter.current()
-                .requestAuthorization(options: [.alert, .sound, .badge, .provisional])
+                .requestAuthorization(options: [.alert, .sound, .badge])
             if granted {
                 await MainActor.run { UIApplication.shared.registerForRemoteNotifications() }
             }
@@ -75,7 +90,7 @@ final class PermissionManager {
     }
 
     func openNotificationSettings() {
-        guard let url = URL(string: UIApplication.openNotificationSettingsURLString ?? UIApplication.openSettingsURLString) else { return }
+        guard let url = URL(string: UIApplication.openNotificationSettingsURLString) else { return }
         UIApplication.shared.open(url)
     }
 

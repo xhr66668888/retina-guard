@@ -31,6 +31,24 @@ struct SettingsView: View {
                 }
 
                 ChecklistRow(
+                    title: "Time-sensitive alerts",
+                    description: "Lets reminders appear immediately in Focus or summary modes.",
+                    granted: perms.timeSensitive,
+                    actionLabel: "Open"
+                ) {
+                    PermissionManager.shared.openNotificationSettings()
+                }
+
+                ChecklistRow(
+                    title: "Live Activity",
+                    description: "Shows the countdown on the Lock Screen and Dynamic Island.",
+                    granted: perms.liveActivities,
+                    actionLabel: "Open"
+                ) {
+                    PermissionManager.shared.openAppSettings()
+                }
+
+                ChecklistRow(
                     title: "Background refresh",
                     description: "Keeps countdown running when app is backgrounded.",
                     granted: perms.backgroundRefresh,
@@ -165,19 +183,19 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     OemItem(
                         title: "Background App Refresh",
-                        body: "Go to Settings > General > Background App Refresh. Ensure it's enabled globally and for Retina Guard."
+                        detail: "Go to Settings > General > Background App Refresh. Ensure it's enabled globally and for Retina Guard."
                     )
                     OemItem(
                         title: "Low Power Mode",
-                        body: "Low Power Mode disables background refresh. Keep your device charged or disable Low Power Mode for reliable reminders."
+                        detail: "Low Power Mode disables background refresh. Keep your device charged or disable Low Power Mode for reliable reminders."
                     )
                     OemItem(
                         title: "Notification delivery",
-                        body: "Go to Settings > Notifications > Retina Guard. Enable 'Allow Notifications', set to 'Immediate Delivery', and choose a prominent alert style."
+                        detail: "Go to Settings > Notifications > Retina Guard. Enable 'Allow Notifications', set to 'Immediate Delivery', and choose a prominent alert style."
                     )
                     OemItem(
                         title: "Focus / Do Not Disturb",
-                        body: "If you use Focus modes, add Retina Guard to the 'Allowed Apps' list so break reminders aren't silenced."
+                        detail: "If you use Focus modes, add Retina Guard to the 'Allowed Apps' list so break reminders aren't silenced."
                     )
                 }
                 .padding(.horizontal, 24)
@@ -230,14 +248,14 @@ struct SettingsView: View {
 
 struct OemItem: View {
     let title: String
-    let body: String
+    let detail: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.body.weight(.medium))
                 .foregroundColor(Color("Charcoal"))
-            Text(body)
+            Text(detail)
                 .font(.caption)
                 .foregroundColor(.secondary)
         }

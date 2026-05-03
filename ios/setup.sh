@@ -14,15 +14,15 @@ name: RetinaGuard
 options:
   bundleIdPrefix: com.retinaguard
   deploymentTarget:
-    iOS: "16.0"
-  xcodeVersion: "15.0"
+    iOS: "16.2"
+  xcodeVersion: "16.0"
 settings:
   base:
     INFOPLIST_FILE: RetinaGuard/Resources/Info.plist
     PRODUCT_BUNDLE_IDENTIFIER: com.retinaguard.app
     MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: 1
-    SWIFT_VERSION: "5.9"
+    SWIFT_VERSION: "6.0"
     TARGETED_DEVICE_FAMILY: "1,2"
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: Color
@@ -36,6 +36,9 @@ targets:
       - RetinaGuard
     resources:
       - RetinaGuard/Resources
+    dependencies:
+      - target: RetinaGuardLiveActivity
+        embed: true
     settings:
       base:
         INFOPLIST_FILE: RetinaGuard/Resources/Info.plist
@@ -45,6 +48,18 @@ targets:
       properties:
         com.apple.security.application-groups:
           - group.com.retinaguard
+        com.apple.developer.usernotifications.time-sensitive: true
+  RetinaGuardLiveActivity:
+    type: app-extension
+    platform: iOS
+    sources:
+      - RetinaGuardLiveActivity
+      - RetinaGuard/Models/LiveActivityAttributes.swift
+    settings:
+      base:
+        INFOPLIST_FILE: RetinaGuardLiveActivity/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.retinaguard.app.liveactivity
+        APPLICATION_EXTENSION_API_ONLY: YES
 EOF
     xcodegen generate
     echo "Done! Open RetinaGuard.xcodeproj in Xcode."

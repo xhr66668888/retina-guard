@@ -4,6 +4,7 @@ import BackgroundTasks
 @main
 struct RetinaGuardApp: App {
 
+    @Environment(\.scenePhase) private var scenePhase
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var store = PreferencesStore.shared
 
@@ -16,6 +17,12 @@ struct RetinaGuardApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(store)
+                .onChange(of: scenePhase) { phase in
+                    if phase == .active {
+                        AlarmScheduler.shared.rescheduleOnForeground()
+                        LiveActivityManager.shared.syncFromStore(store)
+                    }
+                }
         }
     }
 
@@ -24,8 +31,10 @@ struct RetinaGuardApp: App {
             forTaskWithIdentifier: "com.retinaguard.refresh",
             using: nil
         ) { task in
-            AlarmScheduler.shared.onBreakDue()
-            task.setTaskCompleted(success: true)
+            Task { @MainActor in
+                AlarmScheduler.shared.onBreakDue()
+                task.setTaskCompleted(success: true)
+            }
         }
     }
 }
@@ -36,12 +45,5 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         return true
-    }
-
-    func application(
-        _ application: UIApplication,
-        didReceiveRemoteNotification userInfo: [AnyHashable: Any]
-    ) async -> UIBackgroundFetchResult {
-        return .newData
     }
 }

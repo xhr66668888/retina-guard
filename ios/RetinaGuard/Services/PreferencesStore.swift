@@ -3,6 +3,7 @@ import Combine
 
 /// UserDefaults-backed repository — port of Android PreferencesRepository.
 /// Every setter writes immediately and publishes via @Published.
+@MainActor
 final class PreferencesStore: ObservableObject {
 
     static let shared = PreferencesStore()

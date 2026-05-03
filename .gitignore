@@ -13,6 +13,8 @@ android/.kotlin/
 .idea/
 *.iml
 .vscode/
+xcuserdata/
+*.xcuserstate
 
 # macOS
 .DS_Store

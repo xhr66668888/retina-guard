@@ -39,8 +39,10 @@ struct BreakView: View {
         .onAppear {
             remaining = store.settings.breakSeconds
             timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-                remaining -= 1
-                if remaining <= 0 { onDone() }
+                Task { @MainActor in
+                    remaining -= 1
+                    if remaining <= 0 { onDone() }
+                }
             }
         }
         .onDisappear {

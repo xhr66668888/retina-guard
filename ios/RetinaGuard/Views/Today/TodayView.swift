@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TodayView: View {
     @EnvironmentObject var store: PreferencesStore
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var tracker = ScreenUsageTracker()
     @State private var now = Date()
     @State private var timerRunning = false
@@ -154,8 +155,19 @@ struct TodayView: View {
             .padding(.bottom, 24)
         }
         .background(Color.white)
-        .onAppear { startTicking() }
+        .onAppear {
+            now = Date()
+            LiveActivityManager.shared.syncFromStore(store)
+            startTicking()
+        }
         .onDisappear { stopTicking() }
+        .onChange(of: scenePhase) { phase in
+            if phase == .active {
+                now = Date()
+                AlarmScheduler.shared.rescheduleOnForeground()
+                LiveActivityManager.shared.syncFromStore(store)
+            }
+        }
     }
 
     // MARK: - Actions
@@ -167,13 +179,14 @@ struct TodayView: View {
         if store.settings.usageAwareEnabled {
             tracker.start(initialMs: 0)
         }
+        LiveActivityManager.shared.start(nextDueAt: due, settings: store.settings)
         AlarmScheduler.shared.scheduleNextBreak()
         startTicking()
     }
 
     private func stopProtection() {
         stopTicking()
-        tracker.stop()
+        _ = tracker.stop()
         store.stopProtection(now: Date())
         NotificationManager.shared.cancelOngoing()
         AlarmScheduler.shared.cancelAll()
@@ -181,6 +194,7 @@ struct TodayView: View {
 
     private func takeBreakNow() {
         // Post break notification immediately
+        LiveActivityManager.shared.showBreakDue(settings: store.settings)
         NotificationManager.shared.postBreakReminder(settings: store.settings)
     }
 
@@ -188,29 +202,32 @@ struct TodayView: View {
         timerRunning = store.session.protectionRunning
         tickTimer?.invalidate()
         tickTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-            now = Date()
+            Task { @MainActor in
+                now = Date()
 
-            guard store.session.protectionRunning else {
-                stopTicking()
-                return
-            }
-
-            if store.settings.usageAwareEnabled {
-                tracker.tick()
-                let accum = tracker.getAccumulatedMs()
-                let intervalMs = store.settings.intervalMinutes * 60_000
-                if accum >= intervalMs {
-                    onBreakDue()
-                    tracker.reset()
+                guard store.session.protectionRunning else {
+                    stopTicking()
+                    return
                 }
-            } else {
-                if now >= store.session.nextDueAt && store.session.nextDueAt != .distantPast {
-                    onBreakDue()
+
+                if store.settings.usageAwareEnabled {
+                    tracker.tick()
+                    let accum = tracker.getAccumulatedMs()
+                    let intervalMs = store.settings.intervalMinutes * 60_000
+                    if accum >= intervalMs {
+                        onBreakDue()
+                        tracker.reset()
+                    }
+                } else {
+                    if now >= store.session.nextDueAt && store.session.nextDueAt != .distantPast {
+                        onBreakDue()
+                    }
+                }
+
+                if remainingSec <= 0 {
+                    LiveActivityManager.shared.showBreakDue(settings: store.settings)
                 }
             }
-
-            // Update ongoing notification
-            NotificationManager.shared.postOngoing(remainingSeconds: remainingSec)
         }
     }
 

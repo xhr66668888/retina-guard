@@ -1,8 +1,10 @@
 import UserNotifications
 import UIKit
+import AudioToolbox
 
 /// Wraps UNUserNotificationCenter — port of Android NotificationHelper.
-final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
+@MainActor
+final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDelegate {
 
     static let shared = NotificationManager()
 
@@ -33,7 +35,7 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
 
         let breakCat = UNNotificationCategory(
             identifier: Self.catBreak,
-            actions: [start, snooze, skip],
+            actions: [done, start, snooze, skip],
             intentIdentifiers: [],
             options: [.allowInCarPlay]
         )
@@ -41,7 +43,7 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
             identifier: Self.catOngoing,
             actions: [],
             intentIdentifiers: [],
-            options: [.silentInNotificationCenter]
+            options: []
         )
         center.setNotificationCategories([breakCat, ongoingCat])
     }
@@ -86,6 +88,25 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     // MARK: - Post break reminder
 
     func postBreakReminder(settings: AppSettings) {
+        let content = breakReminderContent(settings: settings)
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        let req = UNNotificationRequest(identifier: Self.notifBreak, content: content, trigger: trigger)
+        center.add(req, withCompletionHandler: nil)
+    }
+
+    // MARK: - Schedule future break (for background)
+
+    func scheduleBreakReminder(at date: Date, settings: AppSettings, repeats: Bool = false) {
+        let content = breakReminderContent(settings: settings)
+        let interval = max(60, date.timeIntervalSinceNow)
+        let triggerInterval = repeats ? max(60, Double(settings.intervalMinutes) * 60) : max(1, interval)
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: triggerInterval, repeats: repeats)
+        let req = UNNotificationRequest(identifier: Self.notifBreak, content: content, trigger: trigger)
+        center.add(req, withCompletionHandler: nil)
+    }
+
+    private func breakReminderContent(settings: AppSettings) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
         content.title = "Time to look away"
         content.body  = "Focus on something far away for 20 seconds."
@@ -96,37 +117,13 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         switch settings.soundMode {
         case .off:   content.sound = nil
         case .soft:  content.sound = .default
-        case .alarm: content.sound = UNNotificationSound.defaultCritical
+        case .alarm:
+            content.sound = UNNotificationSound(
+                named: UNNotificationSoundName(rawValue: "retina_alarm.caf")
+            )
         }
 
-        if settings.vibrationEnabled {
-            // iOS handles vibration with sound automatically
-        }
-
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
-        let req = UNNotificationRequest(identifier: Self.notifBreak, content: content, trigger: trigger)
-        center.add(req, withCompletionHandler: nil)
-    }
-
-    // MARK: - Schedule future break (for background)
-
-    func scheduleBreakReminder(at date: Date, settings: AppSettings) {
-        let content = UNMutableNotificationContent()
-        content.title = "Time to look away"
-        content.body  = "Focus on something far away for 20 seconds."
-        content.categoryIdentifier = Self.catBreak
-        content.interruptionLevel = .timeSensitive
-
-        switch settings.soundMode {
-        case .off:   content.sound = nil
-        case .soft:  content.sound = .default
-        case .alarm: content.sound = UNNotificationSound.defaultCritical
-        }
-
-        let interval = max(1, date.timeIntervalSinceNow)
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
-        let req = UNNotificationRequest(identifier: Self.notifBreak, content: content, trigger: trigger)
-        center.add(req, withCompletionHandler: nil)
+        return content
     }
 
     // MARK: - Cancel
@@ -156,6 +153,9 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         if notification.request.identifier == Self.notifOngoing {
             completionHandler([])
         } else {
+            if PreferencesStore.shared.settings.vibrationEnabled {
+                AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+            }
             completionHandler([.banner, .sound, .badge])
         }
     }
@@ -184,7 +184,9 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
                 store.resetAccumulatedMs()
                 let due = Date().addingTimeInterval(Double(store.settings.snoozeMinutes) * 60)
                 store.setNextDueAt(due)
-                AlarmScheduler.shared.scheduleNextBreak()
+                NotificationManager.shared.cancelBreak()
+                NotificationManager.shared.scheduleBreakReminder(at: due, settings: store.settings)
+                LiveActivityManager.shared.updateCountdown(nextDueAt: due, settings: store.settings)
             case "SKIP":
                 store.recordSkipped()
                 store.resetAccumulatedMs()
